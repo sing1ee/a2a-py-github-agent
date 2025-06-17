@@ -13,9 +13,9 @@ model = LiteLlm(
 )
 
 
-def create_agent(client_id, client_secret) -> LlmAgent:
+def create_agent() -> LlmAgent:
     """Constructs the ADK agent."""
-    toolset = GitHubToolset(client_id=client_id, client_secret=client_secret)
+    toolset = GitHubToolset()
     return LlmAgent(
         model=model,
         name="github_agent",

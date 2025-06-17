@@ -39,9 +39,7 @@ class GitHubCommit(BaseModel):
 class GitHubToolset:
     """GitHub API toolset for querying repositories and recent updates"""
     
-    def __init__(self, client_id: str, client_secret: str):
-        self.client_id = client_id
-        self.client_secret = client_secret
+    def __init__(self):
         self._github_client = None
         
         # Initialize tools
@@ -122,31 +120,31 @@ class GitHubToolset:
             func=self._search_repositories
         )
     
-    def _get_github_client(self, access_token: Optional[str] = None) -> Github:
+    def _get_github_client(self) -> Github:
         """Get GitHub client with authentication"""
-        if access_token:
-            auth = Auth.Token(access_token)
+        # Use environment variable
+        github_token = os.getenv('GITHUB_TOKEN')
+        if github_token:
+            auth = Auth.Token(github_token)
+            return Github(auth=auth)
         else:
-            # Use environment variable as fallback
-            github_token = os.getenv('GITHUB_TOKEN')
-            if github_token:
-                auth = Auth.Token(github_token)
-            else:
-                # Use without authentication (limited rate)
-                auth = None
-        
-        return Github(auth=auth)
+            # Use without authentication (limited rate)
+            print("Warning: No GITHUB_TOKEN found, using unauthenticated access (limited rate)")
+            return Github()
     
     def _get_user_repositories(self, username: Optional[str] = None, days: int = 30, limit: int = 10, **kwargs) -> List[Dict[str, Any]]:
         """Get user's repositories with recent updates"""
         try:
-            access_token = kwargs.get('access_token')
-            github = self._get_github_client(access_token)
+            github = self._get_github_client()
             
             if username:
                 user = github.get_user(username)
             else:
-                user = github.get_user()
+                try:
+                    user = github.get_user()
+                except Exception:
+                    # If no token, we can't get authenticated user, so require username
+                    return [{'error': 'Username is required when not using authentication token'}]
             
             repos = []
             cutoff_date = datetime.now() - timedelta(days=days)
@@ -175,8 +173,7 @@ class GitHubToolset:
     def _get_recent_commits(self, repo_name: str, days: int = 7, limit: int = 10, **kwargs) -> List[Dict[str, Any]]:
         """Get recent commits for a repository"""
         try:
-            access_token = kwargs.get('access_token')
-            github = self._get_github_client(access_token)
+            github = self._get_github_client()
             
             repo = github.get_repo(repo_name)
             commits = []
@@ -201,8 +198,7 @@ class GitHubToolset:
     def _search_repositories(self, query: str, sort: str = 'updated', limit: int = 10, **kwargs) -> List[Dict[str, Any]]:
         """Search for repositories with recent activity"""
         try:
-            access_token = kwargs.get('access_token')
-            github = self._get_github_client(access_token)
+            github = self._get_github_client()
             
             # Add recent activity filter to query
             search_query = f"{query} pushed:>={datetime.now() - timedelta(days=30):%Y-%m-%d}"

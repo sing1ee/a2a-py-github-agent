@@ -1,26 +1,24 @@
-# ADK Agent with Authenticated Tools
+# GitHub Agent with ADK
 
-This example shows how to create an A2A Server that uses an ADK-based Agent that uses GitHub-authenticated tools.
-
-This agent also provides an example of how to use server authentication. If an incoming request contains a JWT, the agent will associate the GitHub API authorization with the `sub` of the token and use it for future requests. This way, if the same user interacts with the agent across multiple sessions, authorization can be reused.
+This example shows how to create an A2A Server that uses an ADK-based Agent for querying GitHub repositories and recent project updates.
 
 ## Prerequisites
 
 - Python 3.10 or higher
 - [UV](https://docs.astral.sh/uv/)
 - A OpenRouter API Key
-- A [GitHub OAuth App](https://docs.github.com/en/developers/apps/building-oauth-apps/creating-an-oauth-app)
-  - Configure your OAuth app to handle redirect URLs at `localhost:10007/authenticate`
+- A [GitHub Personal Access Token](https://github.com/settings/tokens) (optional, but recommended for higher rate limits)
 
 ## Running the example
 
-1. Create the .env file with your API Key and OAuth2.0 Client details
+1. Create the .env file with your API Key and GitHub token
 
    ```bash
-   echo "OPENROUTER_API_KEY=your_api_key_here" > .env
-   echo "GITHUB_CLIENT_ID=your_client_id_here" >> .env
-   echo "GITHUB_CLIENT_SECRET=your_client_secret_here" >> .env
+   echo "OPENROUTER_API_KEY=your_openrouter_api_key_here" > .env
+   echo "GITHUB_TOKEN=your_github_personal_access_token_here" >> .env
    ```
+
+   **Note**: The GitHub token is optional. Without it, the agent will use unauthenticated access with limited rate limits.
 
 2. Run the example
 
@@ -36,8 +34,22 @@ Try running the CLI host at samples/python/hosts/cli to interact with the agent.
 uv run . --agent="http://localhost:10007"
 ```
 
-To test out providing authentication to the agent, you can use GitHub token to provide an ID token to the agent.
+## Example queries
 
-```bash
-uv run . --agent="http://localhost:10007" --header="Authorization=Bearer YOUR_GITHUB_TOKEN"
-```
+The GitHub Agent can handle queries like:
+
+- "Show recent repository updates for username 'octocat'"
+- "Get recent commits for repository 'facebook/react'"
+- "Search for popular Python repositories with recent activity"
+- "What are the latest updates in machine learning repositories?"
+
+## GitHub Token Setup
+
+To create a GitHub Personal Access Token:
+
+1. Go to [GitHub Settings > Tokens](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Select the following scopes:
+   - `repo` - Access to repositories
+   - `user` - Access to user information
+4. Copy the token and add it to your `.env` file

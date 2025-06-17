@@ -1,6 +1,3 @@
-import base64
-import contextlib
-import json
 import logging
 import os
 
@@ -20,17 +17,6 @@ from google.adk.sessions import (
     InMemorySessionService,  # type: ignore[import-untyped]
 )
 from starlette.applications import Starlette
-from starlette.authentication import (
-    AuthCredentials,
-    AuthenticationBackend,
-    BaseUser,
-    SimpleUser,
-)
-from starlette.middleware import Middleware
-from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.requests import HTTPConnection, Request
-from starlette.responses import PlainTextResponse
-from starlette.routing import Route
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -39,10 +25,6 @@ from a2a.types import (
     AgentCapabilities,
     AgentCard,
     AgentSkill,
-    AuthorizationCodeOAuthFlow,
-    OAuth2SecurityScheme,
-    OAuthFlows,
-    SecurityScheme,
 )
 
 
@@ -51,32 +33,11 @@ load_dotenv()
 logging.basicConfig()
 
 
-class InsecureJWTAuthBackend(AuthenticationBackend):
-    """An example implementation of a JWT-based authentication backend."""
-
-    async def authenticate(
-        self, conn: HTTPConnection
-    ) -> tuple[AuthCredentials, BaseUser] | None:
-        # For illustrative purposes only: please validate your JWTs!
-        with contextlib.suppress(Exception):
-            auth_header = conn.headers['Authorization']
-            jwt = auth_header.split('Bearer ')[1]
-            jwt_claims = jwt.split('.')[1]
-            missing_padding = len(jwt_claims) % 4
-            if missing_padding:
-                jwt_claims += '=' * (4 - missing_padding)
-            payload = base64.urlsafe_b64decode(jwt_claims).decode('utf-8')
-            parsed_payload = json.loads(payload)
-            return AuthCredentials([]), SimpleUser(parsed_payload['sub'])
-        return None
-
-
 @click.command()
 @click.option('--host', 'host', default='localhost')
 @click.option('--port', 'port', default=10007)
 def main(host: str, port: int):
     # Verify an API key is set.
-    # Not required if using Vertex AI APIs.
     if not os.getenv('OPENROUTER_API_KEY'):
         raise ValueError(
             'OPENROUTER_API_KEY environment variable not set'
@@ -94,24 +55,7 @@ def main(host: str, port: int):
         ],
     )
 
-    # Define OAuth2 security scheme for GitHub.
-    OAUTH_SCHEME_NAME = "GitHubOAuth"
-    oauth_scheme = OAuth2SecurityScheme(
-        type="oauth2",
-        description="OAuth2 for GitHub API",
-        flows=OAuthFlows(
-            authorizationCode=AuthorizationCodeOAuthFlow(
-                authorizationUrl="https://github.com/login/oauth/authorize",
-                tokenUrl="https://github.com/login/oauth/access_token",
-                scopes={
-                    "repo": "Access to repositories",
-                    "user": "Access to user information"
-                },
-            )
-        ),
-    )
-
-    # Update the AgentCard to include the 'securitySchemes' and 'security' fields.
+    # Simplified AgentCard without authentication requirements
     agent_card = AgentCard(
         name='GitHub Agent',
         description="An agent that can query GitHub repositories and recent project updates",
@@ -121,19 +65,10 @@ def main(host: str, port: int):
         defaultOutputModes=['text'],
         capabilities=AgentCapabilities(streaming=True),
         skills=[skill],
-        securitySchemes={
-            OAUTH_SCHEME_NAME: SecurityScheme(root=oauth_scheme)
-        },
-        # Declare that this scheme is required to use the agent's skills
-        security=[
-            {OAUTH_SCHEME_NAME: ["repo", "user"]}
-        ],
     )
 
-    adk_agent = create_agent(
-        client_id=os.getenv('GITHUB_CLIENT_ID'),
-        client_secret=os.getenv('GITHUB_CLIENT_SECRET'),
-    )
+    # Create agent without OAuth credentials
+    adk_agent = create_agent()
     runner = Runner(
         app_name=agent_card.name,
         agent=adk_agent,
@@ -143,12 +78,6 @@ def main(host: str, port: int):
     )
     agent_executor = ADKAgentExecutor(runner, agent_card)
 
-    async def handle_auth(request: Request) -> PlainTextResponse:
-        await agent_executor.on_auth_callback(
-            str(request.query_params.get('state')), str(request.url)
-        )
-        return PlainTextResponse('Authentication successful.')
-
     request_handler = DefaultRequestHandler(
         agent_executor=agent_executor, task_store=InMemoryTaskStore()
     )
@@ -157,21 +86,8 @@ def main(host: str, port: int):
         agent_card=agent_card, http_handler=request_handler
     )
     routes = a2a_app.routes()
-    routes.append(
-        Route(
-            path='/authenticate',
-            methods=['GET'],
-            endpoint=handle_auth,
-        )
-    )
-    app = Starlette(
-        routes=routes,
-        middleware=[
-            Middleware(
-                AuthenticationMiddleware, backend=InsecureJWTAuthBackend()
-            )
-        ],
-    )
+    
+    app = Starlette(routes=routes)
 
     uvicorn.run(app, host=host, port=port)
 
