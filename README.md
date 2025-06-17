@@ -152,13 +152,26 @@ You can also test using curl or any HTTP client:
 
 ```bash
 # Example: Test with a simple query
-curl -X POST http://localhost:10007/tasks \
+curl -X POST http://localhost:10007/ \
   -H "Content-Type: application/json" \
   -d '{
-    "input": {
-      "text": "Show my recent repository updates"
-    }
-  }'
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "message/send",
+  "params": {
+    "message": {
+      "role": "user",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Show recent commits for repository 'facebook/react'"
+        }
+      ],
+      "messageId": "9229e770-767c-417b-a0b0-f0741243c589"
+    },
+    "metadata": {}
+  }
+}'
 ```
 
 ## 💡 Example Queries
