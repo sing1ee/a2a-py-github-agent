@@ -77,33 +77,35 @@ class InsecureJWTAuthBackend(AuthenticationBackend):
 def main(host: str, port: int):
     # Verify an API key is set.
     # Not required if using Vertex AI APIs.
-    if os.getenv('GOOGLE_GENAI_USE_VERTEXAI') != 'TRUE' and not os.getenv(
-        'GOOGLE_API_KEY'
-    ):
+    if not os.getenv('OPENROUTER_API_KEY'):
         raise ValueError(
-            'GOOGLE_API_KEY environment variable not set and '
-            'GOOGLE_GENAI_USE_VERTEXAI is not TRUE.'
+            'OPENROUTER_API_KEY environment variable not set'
         )
 
     skill = AgentSkill(
-        id='check_availability',
-        name='Check Availability',
-        description="Checks a user's availability for a time using their Google Calendar",
-        tags=['calendar'],
-        examples=['Am I free from 10am to 11am tomorrow?'],
+        id='github_repositories',
+        name='GitHub Repositories',
+        description="Query GitHub repositories, recent updates, commits, and project activity",
+        tags=['github', 'repositories', 'commits'],
+        examples=[
+            'Show my recent repository updates',
+            'What are the latest commits in my project?',
+            'Search for popular Python repositories with recent activity'
+        ],
     )
 
-    # Define OAuth2 security scheme.
-    OAUTH_SCHEME_NAME = "CalendarGoogleOAuth"
+    # Define OAuth2 security scheme for GitHub.
+    OAUTH_SCHEME_NAME = "GitHubOAuth"
     oauth_scheme = OAuth2SecurityScheme(
         type="oauth2",
-        description="OAuth2 for Google Calendar API",
+        description="OAuth2 for GitHub API",
         flows=OAuthFlows(
             authorizationCode=AuthorizationCodeOAuthFlow(
-                authorizationUrl="https://accounts.google.com/o/oauth2/auth",
-                tokenUrl="https://oauth2.googleapis.com/token",
+                authorizationUrl="https://github.com/login/oauth/authorize",
+                tokenUrl="https://github.com/login/oauth/access_token",
                 scopes={
-                    "https://www.googleapis.com/auth/calendar": "Access Google Calendar"
+                    "repo": "Access to repositories",
+                    "user": "Access to user information"
                 },
             )
         ),
@@ -111,8 +113,8 @@ def main(host: str, port: int):
 
     # Update the AgentCard to include the 'securitySchemes' and 'security' fields.
     agent_card = AgentCard(
-        name='Calendar Agent',
-        description="An agent that can manage a user's calendar",
+        name='GitHub Agent',
+        description="An agent that can query GitHub repositories and recent project updates",
         url=f'http://{host}:{port}/',
         version='1.0.0',
         defaultInputModes=['text'],
@@ -124,13 +126,13 @@ def main(host: str, port: int):
         },
         # Declare that this scheme is required to use the agent's skills
         security=[
-            {OAUTH_SCHEME_NAME: ["https://www.googleapis.com/auth/calendar"]}
+            {OAUTH_SCHEME_NAME: ["repo", "user"]}
         ],
     )
 
     adk_agent = create_agent(
-        client_id=os.getenv('GOOGLE_CLIENT_ID'),
-        client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+        client_id=os.getenv('GITHUB_CLIENT_ID'),
+        client_secret=os.getenv('GITHUB_CLIENT_SECRET'),
     )
     runner = Runner(
         app_name=agent_card.name,

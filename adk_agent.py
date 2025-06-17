@@ -1,33 +1,42 @@
 import datetime
 import os
-from litellm import OpenRouter
 from google.adk.agents import LlmAgent  # type: ignore[import-untyped]
-from google.adk.tools.google_api_tool import CalendarToolset  # type: ignore[import-untyped]
+from google.adk.models.lite_llm import LiteLlm
+from github_toolset import GitHubToolset  # type: ignore[import-untyped]
 
 openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
-model = OpenRouter(
-    model_name="anthropic/claude-3.5-sonnet",
+model = LiteLlm(
+    model="openrouter/anthropic/claude-3.5-sonnet",
     api_key=openrouter_api_key,
+    base_url="https://openrouter.ai/api/v1",
 )
 
 
 def create_agent(client_id, client_secret) -> LlmAgent:
     """Constructs the ADK agent."""
-    toolset = CalendarToolset(client_id=client_id, client_secret=client_secret)
+    toolset = GitHubToolset(client_id=client_id, client_secret=client_secret)
     return LlmAgent(
         model=model,
-        name="calendar_agent",
-        description="An agent that can help manage a user's calendar",
+        name="github_agent",
+        description="An agent that can help query GitHub repositories and recent project updates",
         instruction=f"""
-You are an agent that can help manage a user's calendar.
+You are a GitHub agent that can help users query information about GitHub repositories and recent project updates.
 
-Users will request information about the state of their calendar or to make changes to
-their calendar. Use the provided tools for interacting with the calendar API.
+Users will request information about:
+- Recent updates to their repositories
+- Recent commits in specific repositories  
+- Search for repositories with recent activity
+- General GitHub project information
 
-If not specified, assume the calendar the user wants is the 'primary' calendar.
+Use the provided tools for interacting with the GitHub API.
 
-When using the Calendar API tools, use well-formed RFC3339 timestamps.
+When displaying repository information, include relevant details like:
+- Repository name and description
+- Last updated time
+- Programming language
+- Stars and forks count
+- Recent commit information when available
 
 Today is {datetime.datetime.now()}.
 """,
