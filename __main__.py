@@ -2,20 +2,10 @@ import logging
 import os
 
 import click
-import uvicorn
-from adk_agent import create_agent  # type: ignore[import-not-found]
-from adk_agent_executor import ADKAgentExecutor  # type: ignore[import-untyped]
+import uvicorn  
+from openai_agent import create_agent  # type: ignore[import-not-found] 
+from openai_agent_executor import OpenAIAgentExecutor  # type: ignore[import-untyped]
 from dotenv import load_dotenv
-from google.adk.artifacts import (
-    InMemoryArtifactService,  # type: ignore[import-untyped]
-)
-from google.adk.memory.in_memory_memory_service import (
-    InMemoryMemoryService,  # type: ignore[import-untyped]
-)
-from google.adk.runners import Runner  # type: ignore[import-untyped]
-from google.adk.sessions import (
-    InMemorySessionService,  # type: ignore[import-untyped]
-)
 from starlette.applications import Starlette
 
 from a2a.server.apps import A2AStarletteApplication
@@ -55,7 +45,7 @@ def main(host: str, port: int):
         ],
     )
 
-    # Simplified AgentCard without authentication requirements
+    # AgentCard for OpenAI-based agent
     agent_card = AgentCard(
         name='GitHub Agent',
         description="An agent that can query GitHub repositories and recent project updates",
@@ -67,16 +57,13 @@ def main(host: str, port: int):
         skills=[skill],
     )
 
-    # Create agent without OAuth credentials
-    adk_agent = create_agent()
-    runner = Runner(
-        app_name=agent_card.name,
-        agent=adk_agent,
-        artifact_service=InMemoryArtifactService(),
-        session_service=InMemorySessionService(),
-        memory_service=InMemoryMemoryService(),
+    # Create OpenAI agent
+    agent_data = create_agent()
+    agent_executor = OpenAIAgentExecutor(
+        card=agent_card,
+        tools=agent_data['tools'],
+        api_key=os.getenv('OPENROUTER_API_KEY')
     )
-    agent_executor = ADKAgentExecutor(runner, agent_card)
 
     request_handler = DefaultRequestHandler(
         agent_executor=agent_executor, task_store=InMemoryTaskStore()

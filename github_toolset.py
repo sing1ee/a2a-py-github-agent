@@ -3,8 +3,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 from github import Github, Auth
-from google.adk.tools import Tool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class GitHubUser(BaseModel):
@@ -41,99 +40,36 @@ class GitHubToolset:
     
     def __init__(self):
         self._github_client = None
-        
-        # Initialize tools
-        self.get_user_repos = Tool(
-            name="get_user_repositories",
-            description="Get user's repositories with recent updates",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "username": {
-                        "type": "string",
-                        "description": "GitHub username (optional, defaults to authenticated user)"
-                    },
-                    "days": {
-                        "type": "integer",
-                        "description": "Number of days to look back for updates (default: 30)",
-                        "default": 30
-                    },
-                    "limit": {
-                        "type": "integer", 
-                        "description": "Maximum number of repositories to return (default: 10)",
-                        "default": 10
-                    }
-                }
-            },
-            func=self._get_user_repositories
-        )
-        
-        self.get_recent_commits = Tool(
-            name="get_recent_commits",
-            description="Get recent commits for a repository",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "repo_name": {
-                        "type": "string",
-                        "description": "Repository name in format 'owner/repo'"
-                    },
-                    "days": {
-                        "type": "integer",
-                        "description": "Number of days to look back for commits (default: 7)",
-                        "default": 7
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of commits to return (default: 10)", 
-                        "default": 10
-                    }
-                },
-                "required": ["repo_name"]
-            },
-            func=self._get_recent_commits
-        )
-        
-        self.search_repositories = Tool(
-            name="search_repositories",
-            description="Search for repositories with recent activity",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query for repositories"
-                    },
-                    "sort": {
-                        "type": "string",
-                        "description": "Sort results by: 'updated', 'stars', 'forks' (default: 'updated')",
-                        "default": "updated"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of repositories to return (default: 10)",
-                        "default": 10
-                    }
-                },
-                "required": ["query"]
-            },
-            func=self._search_repositories
-        )
     
     def _get_github_client(self) -> Github:
         """Get GitHub client with authentication"""
-        # Use environment variable
-        github_token = os.getenv('GITHUB_TOKEN')
-        if github_token:
-            auth = Auth.Token(github_token)
-            return Github(auth=auth)
-        else:
-            # Use without authentication (limited rate)
-            print("Warning: No GITHUB_TOKEN found, using unauthenticated access (limited rate)")
-            return Github()
+        if self._github_client is None:
+            github_token = os.getenv('GITHUB_TOKEN')
+            if github_token:
+                auth = Auth.Token(github_token)
+                self._github_client = Github(auth=auth)
+            else:
+                # Use without authentication (limited rate)
+                print("Warning: No GITHUB_TOKEN found, using unauthenticated access (limited rate)")
+                self._github_client = Github()
+        return self._github_client
     
-    def _get_user_repositories(self, username: Optional[str] = None, days: int = 30, limit: int = 10, **kwargs) -> List[Dict[str, Any]]:
-        """Get user's repositories with recent updates"""
+    def get_user_repositories(self, username: Optional[str] = None, days: Optional[int] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+        """Get user's repositories with recent updates
+        Args:
+            username: GitHub username (optional, defaults to authenticated user)
+            days: Number of days to look for recent updates (default: 30 days)
+            limit: Maximum number of repositories to return (default: 10)
+            
+        Returns:
+            dict: Contains status ('success' or 'error') and repository list or error message.
+        """
+        # Set default values
+        if days is None:
+            days = 30
+        if limit is None:
+            limit = 10
+
         try:
             github = self._get_github_client()
             
@@ -144,7 +80,10 @@ class GitHubToolset:
                     user = github.get_user()
                 except Exception:
                     # If no token, we can't get authenticated user, so require username
-                    return [{'error': 'Username is required when not using authentication token'}]
+                    return {
+                        'status': 'error',
+                        'error_message': 'Username is required when not using authentication token'
+                    }
             
             repos = []
             cutoff_date = datetime.now() - timedelta(days=days)
@@ -166,12 +105,35 @@ class GitHubToolset:
                         'forks': repo.forks_count
                     })
             
-            return repos
+            return {
+                'status': 'success',
+                'data': repos,
+                'count': len(repos),
+                'message': f'Successfully retrieved {len(repos)} repositories updated in the last {days} days'
+            }
         except Exception as e:
-            return [{'error': f'Failed to get repositories: {str(e)}'}]
+            return {
+                'status': 'error',
+                'error_message': f'Failed to get repositories: {str(e)}'
+            }
     
-    def _get_recent_commits(self, repo_name: str, days: int = 7, limit: int = 10, **kwargs) -> List[Dict[str, Any]]:
-        """Get recent commits for a repository"""
+    def get_recent_commits(self, repo_name: str, days: Optional[int] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+        """Get recent commits for a repository
+        
+        Args:
+            repo_name: Repository name in format 'owner/repo'
+            days: Number of days to look for recent commits (default: 7 days)
+            limit: Maximum number of commits to return (default: 10)
+            
+        Returns:
+            dict: Contains status ('success' or 'error') and commit list or error message.
+        """
+        # Set default values
+        if days is None:
+            days = 7
+        if limit is None:
+            limit = 10
+            
         try:
             github = self._get_github_client()
             
@@ -185,18 +147,41 @@ class GitHubToolset:
                     
                 commits.append({
                     'sha': commit.sha[:8],
-                    'message': commit.commit.message.split('\n')[0],  # First line only
+                    'message': commit.commit.message.split('\n')[0],  # Only take the first line
                     'author': commit.commit.author.name,
                     'date': commit.commit.author.date.isoformat(),
                     'url': commit.html_url
                 })
             
-            return commits
+            return {
+                'status': 'success',
+                'data': commits,
+                'count': len(commits),
+                'message': f'Successfully retrieved {len(commits)} commits for repository {repo_name} in the last {days} days'
+            }
         except Exception as e:
-            return [{'error': f'Failed to get commits: {str(e)}'}]
+            return {
+                'status': 'error',
+                'error_message': f'Failed to get commits: {str(e)}'
+            }
     
-    def _search_repositories(self, query: str, sort: str = 'updated', limit: int = 10, **kwargs) -> List[Dict[str, Any]]:
-        """Search for repositories with recent activity"""
+    def search_repositories(self, query: str, sort: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+        """Search for repositories with recent activity
+        
+        Args:
+            query: Search query string
+            sort: Sorting method, optional values: 'updated', 'stars', 'forks' (default: 'updated')
+            limit: Maximum number of repositories to return (default: 10)
+            
+        Returns:
+            dict: Contains status ('success' or 'error') and search results or error message.
+        """
+        # Set default values
+        if sort is None:
+            sort = 'updated'
+        if limit is None:
+            limit = 10
+            
         try:
             github = self._get_github_client()
             
@@ -219,14 +204,22 @@ class GitHubToolset:
                     'forks': repo.forks_count
                 })
             
-            return repos
+            return {
+                'status': 'success',
+                'data': repos,
+                'count': len(repos),
+                'message': f'Successfully searched for {len(repos)} repositories matching "{query}"'
+            }
         except Exception as e:
-            return [{'error': f'Failed to search repositories: {str(e)}'}]
+            return {
+                'status': 'error',
+                'error_message': f'Failed to search repositories: {str(e)}'
+            }
     
-    def get_tools(self) -> List[Tool]:
-        """Return list of available tools"""
-        return [
-            self.get_user_repos,
-            self.get_recent_commits,
-            self.search_repositories
-        ] 
+    def get_tools(self) -> Dict[str, Any]:
+        """Return dictionary of available tools for OpenAI function calling"""
+        return {
+            'get_user_repositories': self,
+            'get_recent_commits': self,
+            'search_repositories': self,
+        } 

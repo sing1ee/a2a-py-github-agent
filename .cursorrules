@@ -107,5 +107,9 @@ Migration guide: https://example.com/migration
 
 # 项目管理
 - 使用 bun管理项目
-- nodejs+typescrit
+- uv管理项目
+- 项目在 venv 中运行
 - ai使用 openrouter
+- 运行方式：
+  - source  .venv/bin/activate
+  - uv run .
