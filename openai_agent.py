@@ -3,7 +3,7 @@ from github_toolset import GitHubToolset  # type: ignore[import-untyped]
 
 
 def create_agent():
-    """构建 OpenAI agent 及其工具"""
+    """Create OpenAI agent and its tools"""
     toolset = GitHubToolset()
     tools = toolset.get_tools()
     

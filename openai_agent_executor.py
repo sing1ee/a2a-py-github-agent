@@ -1,9 +1,7 @@
-import asyncio
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 
-import openai
 from openai import AsyncOpenAI
 
 from a2a.server.agent_execution import AgentExecutor
@@ -12,7 +10,6 @@ from a2a.server.events.event_queue import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import (
     AgentCard,
-    Part,
     TaskState,
     TextPart,
     UnsupportedOperationError,
@@ -138,7 +135,7 @@ Always provide helpful and accurate information based on the GitHub API results.
                     # Send update to show we're processing
                     await task_updater.update_status(
                         TaskState.working,
-                        message=task_updater.new_agent_message([TextPart(text="正在处理工具调用...")]),
+                        message=task_updater.new_agent_message([TextPart(text="Processing tool calls...")]),
                     )
                     
                     # Continue the loop to get the final response
@@ -154,13 +151,13 @@ Always provide helpful and accurate information based on the GitHub API results.
                     
             except Exception as e:
                 logger.error(f'Error in OpenAI API call: {e}')
-                error_parts = [TextPart(text=f"抱歉，处理请求时出现错误: {str(e)}")]
+                error_parts = [TextPart(text=f"Sorry, an error occurred while processing the request: {str(e)}")]
                 await task_updater.add_artifact(error_parts)
                 await task_updater.complete()
                 break
         
         if iteration >= max_iterations:
-            error_parts = [TextPart(text="抱歉，请求处理超过最大迭代次数。")]
+            error_parts = [TextPart(text="Sorry, the request has exceeded the maximum number of iterations.")]
             await task_updater.add_artifact(error_parts)
             await task_updater.complete()
 
